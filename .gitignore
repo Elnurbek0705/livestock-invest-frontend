@@ -1,0 +1,16 @@
+node_modules
+.next
+tsconfig.tsbuildinfo
+.turbo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build output
+/dist
+/coverage
+
+# macOS system files
+.DS_Store
