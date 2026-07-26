@@ -4,23 +4,11 @@ import { useEffect, useState } from "react";
 import { getApiClient } from "@livestock-invest/api-client";
 import type { AdminDashboard, User, Farm, Investment } from "@livestock-invest/shared-types";
 import { PageTransition } from "@/components/PageTransition";
-import {
-  ShieldAlert,
-  Coins,
-  Building2,
-  Users,
-  CheckCircle2,
-  ArrowRight,
-  TrendingUp,
-  XCircle,
-  Loader2,
-} from "lucide-react";
-import { useAuthStore } from "@/lib/authStore";
-import { useRouter } from "next/navigation";
+import { ShieldAlert, Coins, Building2, Users, CircleCheck as CheckCircle2, ArrowRight, TrendingUp, Circle as XCircle, Loader as Loader2 } from "lucide-react";
+import { useRequireAuth } from "@/lib/useRequireAuth";
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
-  const currentUser = useAuthStore((s) => s.user);
+  const { state } = useRequireAuth("admin");
 
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -52,12 +40,9 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    if (currentUser && currentUser.role !== "admin") {
-      router.push("/");
-      return;
-    }
+    if (state !== "authenticated") return;
     loadAdminData();
-  }, [currentUser]);
+  }, [state]);
 
   // Actions
   const handleVerifyFarm = async (farmId: string, status: "platform_approved" | "rejected") => {
@@ -135,6 +120,18 @@ export default function AdminDashboardPage() {
     { key: "admin", label: "Adminlar", count: users.filter((user) => user.role === "admin").length },
     { key: "vet", label: "VET", count: users.filter((user) => user.role === "vet").length },
   ] as const;
+
+  if (state !== "authenticated") {
+    return (
+      <PageTransition>
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+          <div className="flex items-center justify-center py-20 text-zinc-500 text-sm font-semibold">
+            <Loader2 className="h-6 w-6 animate-spin mr-2 text-emerald-600" /> Yuklanmoqda...
+          </div>
+        </main>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>

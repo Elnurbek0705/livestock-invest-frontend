@@ -3,20 +3,7 @@ import { notFound } from "next/navigation";
 import { getApiClient } from "@livestock-invest/api-client";
 import { InvestButton } from "./InvestButton";
 import { PageTransition } from "@/components/PageTransition";
-import {
-  ArrowLeft,
-  ShieldCheck,
-  Scale,
-  Calendar,
-  Percent,
-  MapPin,
-  Stethoscope,
-  Building2,
-  TrendingUp,
-  CheckCircle2,
-  Sparkles,
-  Info,
-} from "lucide-react";
+import { ArrowLeft, ShieldCheck, Scale, Calendar, Percent, MapPin, Stethoscope, Building2, TrendingUp, CircleCheck as CheckCircle2, Sparkles, Info } from "lucide-react";
 
 export default async function LivestockDetailPage({
   params,
@@ -228,7 +215,12 @@ export default async function LivestockDetailPage({
 
               {/* Action Button */}
               {livestock.status === "listed" ? (
-                <InvestButton livestockId={livestock.id} />
+                <InvestButton
+                  livestockId={livestock.id}
+                  priceUzs={livestock.priceUzs}
+                  breed={livestock.breed}
+                  investorSharePercent={livestock.offeredInvestorSharePercent}
+                />
               ) : (
                 <div className="p-4 rounded-xl bg-zinc-800 text-center text-xs text-zinc-400 font-semibold border border-zinc-700">
                   Bu chorva hozircha investitsiya uchun ochiq emas (holati: {livestock.status}).

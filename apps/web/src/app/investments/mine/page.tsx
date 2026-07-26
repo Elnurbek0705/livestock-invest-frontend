@@ -4,23 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getApiClient } from "@livestock-invest/api-client";
-import type { Investment } from "@livestock-invest/shared-types";
+import type { Investment, Livestock } from "@livestock-invest/shared-types";
 import { PageTransition } from "@/components/PageTransition";
-import {
-  TrendingUp,
-  ShieldCheck,
-  Coins,
-  Clock,
-  CheckCircle2,
-  ArrowRight,
-  ShoppingBag,
-  AlertCircle,
-  Scale,
-  Building2,
-  Calendar,
-  ChevronRight,
-  FileText,
-} from "lucide-react";
+import { useRequireAuth } from "@/lib/useRequireAuth";
+import { TrendingUp, ShieldCheck, Coins, Clock, CircleCheck as CheckCircle2, ArrowRight, ShoppingBag, CircleAlert as AlertCircle, Scale, Building2, Calendar, ChevronRight, FileText, Loader as Loader2 } from "lucide-react";
 
 // Escrow process steps for visual tracker
 const ESCROW_STEPS = [
@@ -31,20 +18,37 @@ const ESCROW_STEPS = [
 ];
 
 export default function MyInvestmentsPage() {
+  const { state } = useRequireAuth("investor");
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [livestockMap, setLivestockMap] = useState<Record<string, Livestock>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (state !== "authenticated") return;
     const api = getApiClient();
     api.investments
       .listMine()
-      .then(setInvestments)
+      .then(async (list) => {
+        setInvestments(list);
+        const uniqueLivestockIds = Array.from(new Set(list.map((inv) => inv.livestockId)));
+        const entries = await Promise.all(
+          uniqueLivestockIds.map(async (id) => {
+            const item = await api.livestock.getById(id).catch(() => null);
+            return [id, item] as const;
+          }),
+        );
+        const map: Record<string, Livestock> = {};
+        for (const [id, item] of entries) {
+          if (item) map[id] = item;
+        }
+        setLivestockMap(map);
+      })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"),
       )
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [state]);
 
   // Summary calculations
   const totalAmountUzs = investments.reduce((acc, inv) => acc + inv.amountUzs, 0);
@@ -56,7 +60,12 @@ export default function MyInvestmentsPage() {
   return (
     <PageTransition>
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
-        
+        {state !== "authenticated" ? (
+          <div className="flex items-center justify-center py-20 text-zinc-500 text-sm font-semibold">
+            <Loader2 className="h-6 w-6 animate-spin mr-2 text-emerald-600" /> Yuklanmoqda...
+          </div>
+        ) : (
+          <>
         {/* Header & Dashboard Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
@@ -193,7 +202,7 @@ export default function MyInvestmentsPage() {
                       </div>
                       <div>
                         <h3 className="font-extrabold text-base text-zinc-900 dark:text-white flex items-center gap-2">
-                          Zotdor Hisor Qo'zisi
+                          {livestockMap[inv.livestockId]?.breed ?? "Zotdor Qo'zi"}
                           <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                             ID: {inv.livestockId.slice(0, 8)}
                           </span>
@@ -248,10 +257,14 @@ export default function MyInvestmentsPage() {
                       <div className="col-span-2 bg-zinc-50 dark:bg-zinc-800/30 p-3.5 rounded-2xl border border-zinc-200/60 dark:border-zinc-800 flex items-center justify-between text-xs">
                         <span className="text-zinc-500 flex items-center gap-1.5 font-semibold">
                           <Scale className="h-4 w-4 text-emerald-600" />
-                          Prognoz Oylik O'sish:
+                          {livestockMap[inv.livestockId]?.currentWeightKg != null
+                            ? `Joriy vazn: ${livestockMap[inv.livestockId]?.currentWeightKg} kg`
+                            : "Prognoz oylik o'sish:"}
                         </span>
                         <span className="font-bold text-zinc-900 dark:text-white">
-                          +2.5 - 3.2 kg / oy
+                          {livestockMap[inv.livestockId]?.currentWeightKg != null
+                            ? "+2.5 - 3.2 kg / oy"
+                            : "+2.5 - 3.2 kg / oy"}
                         </span>
                       </div>
 
@@ -317,6 +330,8 @@ export default function MyInvestmentsPage() {
           </AnimatePresence>
         </div>
 
+          </>
+        )}
       </main>
     </PageTransition>
   );

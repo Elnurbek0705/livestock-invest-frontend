@@ -7,19 +7,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterInput } from "@livestock-invest/validation";
 import { useAuthStore } from "@/lib/authStore";
+import { getRoleHomePath } from "@/lib/roleHome";
 import { PageTransition } from "@/components/PageTransition";
-import {
-  Sprout,
-  User as UserIcon,
-  Phone,
-  Mail,
-  Lock,
-  ArrowRight,
-  Loader2,
-  TrendingUp,
-  Building2,
-  ShieldCheck,
-} from "lucide-react";
+import { Sprout, User as UserIcon, Phone, Mail, Lock, ArrowRight, Loader as Loader2, TrendingUp, Building2, ShieldCheck } from "lucide-react";
 
 function RegisterForm() {
   const router = useRouter();
@@ -54,7 +44,8 @@ function RegisterForm() {
     setServerError(null);
     try {
       await registerUser(data);
-      router.push("/marketplace");
+      const { user } = useAuthStore.getState();
+      router.push(getRoleHomePath(user?.role ?? data.role));
     } catch (error) {
       setServerError(
         error instanceof Error ? error.message : "Ro'yxatdan o'tishda xatolik yuz berdi",

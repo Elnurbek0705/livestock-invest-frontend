@@ -4,20 +4,12 @@ import { useEffect, useState } from "react";
 import { getApiClient } from "@livestock-invest/api-client";
 import type { Farm, Livestock } from "@livestock-invest/shared-types";
 import { PageTransition } from "@/components/PageTransition";
-import {
-  Building2,
-  Plus,
-  Sprout,
-  FilePlus,
-  X,
-} from "lucide-react";
-import { useAuthStore } from "@/lib/authStore";
-import { useRouter } from "next/navigation";
+import { Building2, Plus, Sprout, FilePlus, X, Loader as Loader2 } from "lucide-react";
+import { useRequireAuth } from "@/lib/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastProvider";
 
 export default function FarmerDashboardPage() {
-  const router = useRouter();
-  const user = useAuthStore((s) => s.user);
+  const { state } = useRequireAuth("farmer");
   const toast = useToast();
 
   const [farms, setFarms] = useState<Farm[]>([]);
@@ -70,12 +62,9 @@ export default function FarmerDashboardPage() {
   };
 
   useEffect(() => {
-    if (user && user.role !== "farmer") {
-      router.push("/");
-      return;
-    }
+    if (state !== "authenticated") return;
     loadFarmerData();
-  }, [user]);
+  }, [state]);
 
   // Actions
   const handleCreateFarm = async (e: React.FormEvent) => {
@@ -142,6 +131,18 @@ export default function FarmerDashboardPage() {
       toast.error(err instanceof Error ? err.message : "Statusni yangilashda xatolik", "Xatolik");
     }
   };
+
+  if (state !== "authenticated") {
+    return (
+      <PageTransition>
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+          <div className="flex items-center justify-center py-20 text-zinc-500 text-sm font-semibold">
+            <Loader2 className="h-6 w-6 animate-spin mr-2 text-emerald-600" /> Yuklanmoqda...
+          </div>
+        </main>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
