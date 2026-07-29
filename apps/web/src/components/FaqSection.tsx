@@ -1,79 +1,72 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { SectionHeading, sectionClass } from "@/components/landing/SectionHeading";
+
+/**
+ * Javoblar ataylab qisqa. Daromad haqidagi javobda aniq foiz va'da qilinmaydi —
+ * huquqiy talab bo'yicha kafolatlangan daromad ko'rsatilishi mumkin emas.
+ */
+const FAQS = [
+  {
+    q: "Pulim qayerda saqlanadi?",
+    a: "Sarmoyangiz platformaning escrow (kafolat) hisobida muzlatiladi. Fermerga u faqat chorvani qabul qilib, parvarishni boshlagandan keyin bosqichma-bosqich o'tkaziladi.",
+  },
+  {
+    q: "Chorva kasallansa yoki nobud bo'lsa-chi?",
+    a: "Har bir ferma va chorva veterinariya nazoratida bo'ladi. Kutilmagan hollarda zarar shartnomadagi tartibda ko'rib chiqiladi.",
+  },
+  {
+    q: "Qancha foyda olaman?",
+    a: "Aniq raqam oldindan ma'lum emas: daromad qo'zining vazn o'sishiga va sotuv paytidagi bozor narxiga bog'liq. Sizga tegadigan ulush foizi esa har bir e'londa oldindan ko'rsatiladi.",
+  },
+  {
+    q: "Fermerman — qanday sarmoya jalb qilaman?",
+    a: "Ro'yxatdan «Fermer» roli bilan o'ting va fermangiz ma'lumotlarini kiriting. Veterinar va administrator tasdiqlagach, bozorga o'z e'lonlaringizni joylashtirasiz.",
+  },
+  {
+    q: "Hisobotlarni qayerdan ko'raman?",
+    a: "«Investitsiyalarim» bo'limida har oygi vazn o'lchovi, suratlar va veterinar xulosasi ko'rinib turadi.",
+  },
+];
 
 export function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-  const faqs = [
-    {
-      q: "Pulim Escrow hisobida qanday saqlanadi?",
-      a: "Siz marketplace orqali investitsiya qilganingizda, mablag'ingiz platformaning xavfsiz Escrow tranzit hisobida muzlatiladi. Pul fermerga chorvani veterinariya ko'rigidan o'tkazib, shartnoma shartlarini bajargandan so'ng bosqichma-bosqich o'tkazib beriladi.",
-    },
-    {
-      q: "Chorva kasallansa yoki nobud bo'lsa nima bo'ladi?",
-      a: "Barcha ferma va chorvalar majburiy ravishda veterinariya nazoratida bo'ladi va sug'urta hamda kafolat fondi tizimi bilan muhofazalanadi. Kutilmagan hollarda zarar shartnoma nizomlariga binoan qayta qoplanadi.",
-    },
-    {
-      q: "Kiritilgan investitsiyadan qancha foyda olaman?",
-      a: "Daromadlilik tanlangan chorva zoti, boshlang'ich vazni va boqish muddatiga bog'liq (odatiy sikl 4-8 oy). O'rtacha yillik va siklik daromadlilik 25% dan 40% gacha yetishi mumkin. Sof foydaning 70% qismi investorga tegishli bo'ladi.",
-    },
-    {
-      q: "Men o'zim fermerman, platformada qanday sarmoya jalb qilishim mumkin?",
-      a: "Ro'yxatdan o'tishda 'Fermer' rolini tanlang va o'z fermangiz ma'lumotlarini kiriting. Platforma administratsiyasi va veterinarlar fermangizni joyida ko mezonlar bo'yicha tekshirib, tasdiqlagach, Marketplace'da o'z e'lonlaringizni joylashtirishingiz mumkin.",
-    },
-    {
-      q: "Oylik hisobotlarni qanday kuzatib boraman?",
-      a: "Shaxsiy kabinetingizdagi 'Mening investitsiyalarim' bo'limida har oy yangilanadigan vazn grafiklari, fotolar va veterinar tibbiy xulosalari real vaqt rejimida ko'rinib turadi.",
-    },
-  ];
-
   return (
-    <section className="py-16 border-t border-zinc-200 dark:border-zinc-800">
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-10 space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-800">
-            <HelpCircle className="h-3.5 w-3.5" />
-            Ko'p Beriladigan Savollar
-          </span>
-          <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
-            Savollaringizga Javoblar
-          </h2>
-          <p className="text-zinc-600 dark:text-zinc-400 text-sm">
-            Investitsiya oqimi va kafolatlar bo'yicha eng muhim ma'lumotlar
-          </p>
-        </div>
+    <section className={sectionClass}>
+      <SectionHeading title="Ko'p beriladigan savollar" />
 
-        <div className="space-y-3">
-          {faqs.map((faq, index) => {
-            const isOpen = openIndex === index;
-            return (
-              <div
-                key={faq.q}
-                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden transition-colors"
-              >
+      <div className="max-w-3xl divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:divide-stone-800 dark:border-stone-800 dark:bg-zinc-900">
+        {FAQS.map((faq, index) => {
+          const isOpen = openIndex === index;
+          return (
+            <div key={faq.q}>
+              <h3>
                 <button
                   type="button"
                   onClick={() => setOpenIndex(isOpen ? null : index)}
-                  className="flex w-full items-center justify-between p-5 text-left font-bold text-zinc-900 dark:text-white hover:text-emerald-600 transition-colors"
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left text-sm font-semibold text-stone-900 transition-colors hover:bg-stone-50 dark:text-white dark:hover:bg-stone-800/50"
                 >
-                  <span className="text-base sm:text-lg pr-4">{faq.q}</span>
+                  {faq.q}
                   <ChevronDown
-                    className={`h-5 w-5 flex-shrink-0 text-zinc-400 transition-transform duration-200 ${
+                    aria-hidden
+                    className={`h-4 w-4 shrink-0 text-stone-400 transition-transform ${
                       isOpen ? "rotate-180 text-emerald-600" : ""
                     }`}
                   />
                 </button>
-                {isOpen && (
-                  <div className="px-5 pb-5 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/60 pt-3">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              </h3>
+              {isOpen && (
+                <p className="px-4 pb-4 text-xs leading-relaxed text-stone-600 dark:text-stone-400">
+                  {faq.a}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
   );

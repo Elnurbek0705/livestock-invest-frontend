@@ -3,6 +3,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ShieldCheck, X, Loader2 } from "lucide-react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  // Hook erta return'dan oldin chaqirilishi shart.
+  useScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   const typeConfigs = {

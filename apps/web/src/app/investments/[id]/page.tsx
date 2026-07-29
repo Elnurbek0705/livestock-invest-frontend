@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getApiClient } from "@livestock-invest/api-client";
 import type { Investment, Transaction } from "@livestock-invest/shared-types";
 import { PageTransition } from "@/components/PageTransition";
+import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "@/lib/uz";
 import {
   ArrowLeft,
   ShieldCheck,
@@ -214,7 +215,7 @@ export default function InvestmentDetailPage({
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-zinc-900 dark:text-white capitalize">
-                        {tx.type.replace(/_/g, " ")}
+                        {TRANSACTION_TYPE[tx.type]}
                       </h4>
                       <span className="text-xs text-zinc-400">
                         {new Date(tx.createdAt).toLocaleString("uz-UZ")}
@@ -226,8 +227,8 @@ export default function InvestmentDetailPage({
                     <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 block">
                       {tx.amountUzs.toLocaleString("uz-UZ")} so'm
                     </span>
-                    <span className="text-xs font-semibold text-zinc-500 uppercase">
-                      Status: {tx.status}
+                    <span className="text-xs font-semibold text-zinc-500">
+                      Holati: {TRANSACTION_STATUS[tx.status]}
                     </span>
                   </div>
                 </div>

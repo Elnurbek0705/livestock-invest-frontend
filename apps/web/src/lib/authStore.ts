@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { User } from "@livestock-invest/shared-types";
+import type { RegisterableRole, User } from "@livestock-invest/shared-types";
 import { getApiClient, tokenStore } from "@livestock-invest/api-client";
 
 interface AuthState {
@@ -13,7 +13,7 @@ interface AuthState {
     fullName: string;
     phone: string;
     email?: string;
-    role: "investor" | "farmer";
+    role: RegisterableRole;
     password: string;
   }) => Promise<void>;
   logout: () => void;

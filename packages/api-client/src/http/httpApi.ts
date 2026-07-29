@@ -1,13 +1,24 @@
 import type {
   AdminDashboard,
+  KycSubmission,
+  KycSubmissionWithUser,
   MonthlyReport,
+  PublicProfile,
   User,
+  VetProfile,
   VetReport,
 } from "@livestock-invest/shared-types";
 import type { LivestockInvestApi } from "../types";
 import { apiRequest } from "./httpClient";
 import { tokenStore } from "./tokenStore";
-import { mapFarm, mapInvestment, mapLivestock, mapTransaction } from "./mappers";
+import {
+  mapFarm,
+  mapInvestment,
+  mapLivestock,
+  mapMyProfile,
+  mapRoleProfile,
+  mapTransaction,
+} from "./mappers";
 
 function buildQuery(params: Record<string, string | undefined>): string {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "");
@@ -42,6 +53,45 @@ export const httpApi: LivestockInvestApi = {
         return await apiRequest<User>("/auth/me");
       } catch {
         tokenStore.clear();
+        return null;
+      }
+    },
+  },
+
+  users: {
+    async me() {
+      const raw = await apiRequest<any>("/users/me");
+      return mapMyProfile(raw);
+    },
+    async updateMe(input) {
+      return apiRequest<User>("/users/me", { method: "PATCH", body: input });
+    },
+    async changePassword(input) {
+      return apiRequest<{ message: string }>("/users/me/password", {
+        method: "PATCH",
+        body: input,
+      });
+    },
+    async updateRoleProfile(input) {
+      const raw = await apiRequest<any>("/users/me/profile", {
+        method: "PATCH",
+        body: input,
+      });
+      return mapRoleProfile(raw);
+    },
+    async submitKyc(input) {
+      return apiRequest<KycSubmission>("/users/me/kyc", {
+        method: "POST",
+        body: input,
+      });
+    },
+    async myKycHistory() {
+      return apiRequest<KycSubmission[]>("/users/me/kyc");
+    },
+    async getPublicProfile(id) {
+      try {
+        return await apiRequest<PublicProfile>(`/users/${id}`, { auth: false });
+      } catch {
         return null;
       }
     },
@@ -198,6 +248,28 @@ export const httpApi: LivestockInvestApi = {
       return apiRequest<User>(`/admin/users/${userId}/role`, {
         method: "PATCH",
         body: { role },
+      });
+    },
+    async setUserActive(userId, isActive) {
+      return apiRequest<User>(`/admin/users/${userId}/active`, {
+        method: "PATCH",
+        body: { isActive },
+      });
+    },
+    async listKyc(status) {
+      const qs = buildQuery({ status });
+      return apiRequest<KycSubmissionWithUser[]>(`/admin/kyc${qs}`);
+    },
+    async reviewKyc(submissionId, input) {
+      return apiRequest<KycSubmission>(`/admin/kyc/${submissionId}`, {
+        method: "PATCH",
+        body: input,
+      });
+    },
+    async verifyVetLicense(vetUserId, isVerified) {
+      return apiRequest<VetProfile>(`/admin/vets/${vetUserId}/license`, {
+        method: "PATCH",
+        body: { isVerified },
       });
     },
   },

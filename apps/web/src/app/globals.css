@@ -1,44 +1,118 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+   Mavzu (yorug' / qorong'i).
+
+   `dark:` varianti OS sozlamasiga emas, <html data-theme> atributiga
+   bog'langan: foydalanuvchi tanlovi tizim sozlamasidan ustun turishi kerak.
+   "Tizim bo'yicha" tanlovi layout'dagi skript tomonidan haqiqiy qiymatga
+   (light yoki dark) aylantiriladi, shuning uchun CSS'da bitta shart yetarli
+   va har bir token ikki marta yozilmaydi.
+   ------------------------------------------------------------------ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ------------------------------------------------------------------
+   Shrift o'lchami — butun interfeys uchun yagona murvat.
+
+   Ildiz elementda `rem` brauzerning o'z sozlamasiga nisbatan hisoblanadi,
+   shuning uchun bu formula foydalanuvchining brauzerdagi shrift sozlamasini
+   bekor qilmaydi, ustiga ko'paytiradi. Tailwind o'lchamlari rem'da bo'lgani
+   uchun matn ham, oraliqlar ham mutanosib kattalashadi — faqat shriftni
+   kattalashtirsak, katta matn tor qutilarga sig'may qolardi.
+
+   Qiymatni `--font-scale` orqali o'zgartiriladi (ThemeProvider yozadi).
+   ------------------------------------------------------------------ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-scale: 1;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html {
+  font-size: calc(1rem * var(--font-scale));
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ------------------------------------------------------------------
+   Chorva bosqichlari uchun tartiblangan (ordinal) yashil ramp.
+   Bosqich qanchalik ilgarilagan bo'lsa, rang shunchalik to'q.
+   Qiymatlar dataviz validatori bilan tekshirilgan:
+     light  → surface #ffffff, dark → surface #18181b (karta foni)
+   Faqat shu yerda o'zgartiriladi — komponentlar var() orqali oladi.
+   ------------------------------------------------------------------ */
+:root {
+  --stage-1: #10b981; /* e'londa */
+  --stage-2: #059669; /* sarmoya jalb qilindi */
+  --stage-3: #047857; /* parvarishda */
+  --stage-4: #065f46; /* sotuvga tayyor */
+  --stage-5: #022c22; /* sotildi */
+  --stage-off: #78716c; /* bekor qilingan — oqimdan tashqarida */
+  --stage-idle: #d6d3d1; /* hali bosib o'tilmagan bosqich */
 }
 
-button{
+[data-theme="dark"] {
+  --stage-1: #6ee7b7;
+  --stage-2: #34d399;
+  --stage-3: #10b981;
+  --stage-4: #059669;
+  --stage-5: #047857;
+  --stage-off: #78716c;
+  --stage-idle: #3f3f46;
+}
+
+/* ------------------------------------------------------------------
+   Diagramma ranglari.
+
+   Qiymatlar dataviz validatori bilan tekshirilgan (--pairs all, karta
+   foni: light #ffffff, dark #18181b):
+     light  #0d9488/#b45309/#4f46e5 — CVD ΔE 13.6, oddiy ko'rish ΔE 23.6
+     dark   #0d9488/#d97706/#6366f1 — CVD ΔE 12.5, oddiy ko'rish ΔE 23.3
+   Ikkala rejim ham yorqinlik oralig'i, xroma va kontrast tekshiruvidan
+   o'tgan. Rangni o'zgartirsangiz validatorni qayta yuriting.
+
+   Bosqichlar uchun alohida ordinal yashil ramp yuqorida (--stage-*).
+   ------------------------------------------------------------------ */
+:root {
+  --chart-series: #059669; /* yagona seriya — vazn chizig'i */
+  --chart-cat-1: #0d9488; /* investor ulushi */
+  --chart-cat-2: #b45309; /* fermer ulushi */
+  --chart-cat-3: #4f46e5; /* platforma komissiyasi */
+  --chart-grid: #e7e5e4;
+  --chart-surface: #ffffff;
+}
+
+[data-theme="dark"] {
+  --chart-series: #34d399;
+  --chart-cat-1: #0d9488;
+  --chart-cat-2: #d97706;
+  --chart-cat-3: #6366f1;
+  --chart-grid: #292524;
+  --chart-surface: #18181b;
+}
+
+/* Iliq stone rangdagi aylantirish paneli — u ham mavzuga ergashadi */
+:root {
+  --scrollbar-thumb: #a8967d;
+}
+
+[data-theme="dark"] {
+  --scrollbar-thumb: #57534e;
+}
+
+button {
   cursor: pointer;
 }
 
-/* darkgreen scrollbar */
 *::-webkit-scrollbar {
-  width: 5px;
+  width: 7px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #435449;
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 
 *::-webkit-scrollbar-track {
   background: transparent;
-} 
+}

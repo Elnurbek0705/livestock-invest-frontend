@@ -1,4 +1,11 @@
-import type { Farm, Investment, Livestock, Transaction } from "@livestock-invest/shared-types";
+import type {
+  Farm,
+  Investment,
+  Livestock,
+  MyProfile,
+  RoleProfile,
+  Transaction,
+} from "@livestock-invest/shared-types";
 
 /**
  * PostgreSQL'ning "bigint" ustunlari (priceUzs, amountUzs va h.k.) `pg`
@@ -39,6 +46,21 @@ export function mapInvestment(raw: any): Investment {
     investorShareUzs: toNumberOrNull(raw.investorShareUzs),
     farmerShareUzs: toNumberOrNull(raw.farmerShareUzs),
   };
+}
+
+/**
+ * Rolga xos profil. Faqat investorda bigint ustun bor
+ * (`targetBudgetUzs`) — qolgan rollarda o'zgartiriladigan raqam yo'q.
+ * Admin uchun profil yozuvining o'zi yo'q, shuning uchun null bo'lishi mumkin.
+ */
+export function mapRoleProfile(raw: any): RoleProfile {
+  if (!raw) return null;
+  if (raw.targetBudgetUzs === undefined) return raw;
+  return { ...raw, targetBudgetUzs: toNumberOrNull(raw.targetBudgetUzs) };
+}
+
+export function mapMyProfile(raw: any): MyProfile {
+  return { ...raw, profile: mapRoleProfile(raw.profile) };
 }
 
 export function mapTransaction(raw: any): Transaction {

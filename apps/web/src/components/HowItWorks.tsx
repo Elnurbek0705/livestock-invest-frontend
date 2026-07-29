@@ -1,89 +1,70 @@
-import { Search, ShieldCheck, Activity, Coins, ArrowRight } from "lucide-react";
+import { Search, ShieldCheck, Activity, Coins } from "lucide-react";
+import { SectionHeading, sectionClass } from "@/components/landing/SectionHeading";
+
+/**
+ * To'rt bosqich — har biriga bitta jumla.
+ *
+ * Ilgari har bosqichda nishon, sarlavha va uch qatorli tavsif bor edi;
+ * bosqichlar mohiyati esa bir jumlaga sig'adi. Matn qisqarganda zanjir
+ * ko'rinishi ham o'qilishi ham osonlashadi.
+ */
+const STEPS = [
+  {
+    icon: Search,
+    title: "Qo'zini tanlaysiz",
+    text: "Bozordan veterinar ko'rigidan o'tgan qo'zini tanlaysiz.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Escrow'ga to'laysiz",
+    text: "Pul kafolat hisobida turadi, fermerga bosqichma-bosqich o'tadi.",
+  },
+  {
+    icon: Activity,
+    title: "Parvarishni kuzatasiz",
+    text: "Har oy vazn o'lchovi va veterinar xulosasi kabinetingizda.",
+  },
+  {
+    icon: Coins,
+    title: "Foyda taqsimlanadi",
+    text: "Sotuvdan keyin tushum shartnomadagi ulushingizga mos bo'linadi.",
+  },
+];
 
 export function HowItWorks() {
-  const steps = [
-    {
-      number: "01",
-      title: "Chorvani Tanlang",
-      description: "Marketplace katalogidan veterinar tomonidan tekshirilgan va sertifikatlangan qo'zi hamda zotdor chorvalarni ko'rib chiqing.",
-      icon: Search,
-      badge: "Katalog",
-    },
-    {
-      number: "02",
-      title: "Escrow orqali Sarmoya Kiritish",
-      description: "Mablag'ingiz xavfsiz Escrow hisobida saqlanadi. Pul faqat chorva ferma parvarishiga o'tgandan so'ng fermerga bosqichma-bosqich o'tkaziladi.",
-      icon: ShieldCheck,
-      badge: "100% Xavfsiz",
-    },
-    {
-      number: "03",
-      title: "Oylik Vazn va Salomatlik Nazorati",
-      description: "Har oy veterinar xulosasi, jonli vazn o'lchovlari va rasm-videoli hisobotlarni shaxsiy kabinetingizda kuzatib borasiz.",
-      icon: Activity,
-      badge: "Shaffoflik",
-    },
-    {
-      number: "04",
-      title: "Sotuv va Foyda Taqsimoti",
-      description: "Semirtirish davri tugagach, chorva bozorda sotiladi va foyda shartnomadagi ulushingizga mos ravishda hisobingizga kelib tushadi.",
-      icon: Coins,
-      badge: "Halol Daromad",
-    },
-  ];
-
   return (
-    <section id="how-it-works" className="scroll-mt-24 py-16 border-t border-zinc-200 dark:border-zinc-800">
-      <div className="text-center max-w-3xl mx-auto mb-14">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-800 mb-3">
-          Oddiy va Shaffof Bosqichlar
-        </span>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
-          Livestock Invest Qanday Ishlaydi?
-        </h2>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400 text-base">
-          Chorvachilik bilimiga ega bo'lmasdan turib ham professional fermalarga sarmoya kiritish va kafolatlangan ulush olish mexanizmi.
-        </p>
-      </div>
+    <section id="how-it-works" className={sectionClass}>
+      <SectionHeading
+        title="Qanday ishlaydi?"
+        subtitle="Chorvachilikni bilmasangiz ham — to'rt qadam"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {steps.map((step, idx) => {
+      <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {STEPS.map((step, index) => {
           const Icon = step.icon;
           return (
-            <div
-              key={step.number}
-              className="relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xs hover:border-emerald-500/50 hover:shadow-lg transition-all"
+            <li
+              key={step.title}
+              className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-zinc-900"
             >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 font-bold">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <span className="text-2xl font-black text-zinc-300 dark:text-zinc-700">
-                    {step.number}
-                  </span>
-                </div>
-
-                <span className="inline-block text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
-                  {step.badge}
+              <div className="flex items-center justify-between">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                  <Icon className="h-4.5 w-4.5" />
                 </span>
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">
-                  {step.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  {step.description}
-                </p>
+                <span className="text-sm font-bold tabular-nums text-stone-300 dark:text-stone-700">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
               </div>
-
-              {idx < steps.length - 1 && (
-                <div className="hidden lg:block absolute -right-3 top-1/2 -translate-y-1/2 z-10">
-                  <ArrowRight className="h-5 w-5 text-zinc-300 dark:text-zinc-700" />
-                </div>
-              )}
-            </div>
+              <h3 className="mt-3 text-sm font-semibold text-stone-900 dark:text-white">
+                {step.title}
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                {step.text}
+              </p>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </section>
   );
 }

@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/authStore";
+import { KYC_STATUS } from "@/lib/uz";
 import { PageTransition } from "@/components/PageTransition";
+import { LogoutButton } from "@/components/LogoutButton";
 import {
   User as UserIcon,
   Phone,
@@ -20,7 +22,7 @@ import {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isInitialized, loadCurrentUser, logout } = useAuthStore();
+  const { user, isInitialized, loadCurrentUser } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -76,15 +78,12 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                logout();
-                router.push("/");
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:hover:bg-red-950 text-xs font-bold transition-all w-fit"
+            <LogoutButton
+              redirectTo="/"
+              className="flex w-fit items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-600 transition-all hover:bg-red-50 dark:border-red-900/60 dark:hover:bg-red-950"
             >
               <LogOut className="h-4 w-4" /> Chiqish
-            </button>
+            </LogoutButton>
           </div>
 
           {/* Profile Details Grid */}
@@ -107,10 +106,10 @@ export default function ProfilePage() {
 
             <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 space-y-1">
               <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> KYC Identifikatsiya Status
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Shaxs tasdig&apos;i (KYC)
               </span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase text-xs block">
-                {user.kycStatus}
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs block">
+                {KYC_STATUS[user.kycStatus]}
               </span>
             </div>
 

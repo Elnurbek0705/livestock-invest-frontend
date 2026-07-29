@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterInput } from "@livestock-invest/validation";
+import type { RegisterableRole } from "@livestock-invest/shared-types";
 import { useAuthStore } from "@/lib/authStore";
 import { PageTransition } from "@/components/PageTransition";
 import {
@@ -18,8 +19,43 @@ import {
   Loader2,
   TrendingUp,
   Building2,
+  Stethoscope,
   ShieldCheck,
+  type LucideIcon,
 } from "lucide-react";
+
+const ROLE_OPTIONS = [
+  {
+    value: "investor",
+    label: "Investor",
+    hint: "Chorvaga sarmoya kiritish",
+    Icon: TrendingUp,
+  },
+  {
+    value: "farmer",
+    label: "Fermer",
+    hint: "Sarmoya jalb qilish",
+    Icon: Building2,
+  },
+  {
+    value: "vet",
+    label: "Veterinar",
+    hint: "Chorvani tekshirish",
+    Icon: Stethoscope,
+  },
+] as const satisfies ReadonlyArray<{
+  value: RegisterableRole;
+  label: string;
+  hint: string;
+  Icon: LucideIcon;
+}>;
+
+/** ?role=... query parametrini xavfsiz rolga aylantiradi. */
+function roleFromParam(value: string | null): RegisterableRole {
+  return ROLE_OPTIONS.some((option) => option.value === value)
+    ? (value as RegisterableRole)
+    : "investor";
+}
 
 function RegisterForm() {
   const router = useRouter();
@@ -27,7 +63,7 @@ function RegisterForm() {
   const registerUser = useAuthStore((s) => s.register);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const initialRole = searchParams.get("role") === "farmer" ? "farmer" : "investor";
+  const initialRole = roleFromParam(searchParams.get("role"));
 
   const {
     register,
@@ -44,9 +80,12 @@ function RegisterForm() {
 
   const selectedRole = watch("role");
 
+  // Boshqa sahifalardan ?role=farmer / ?role=vet bilan kelinganda
+  // mos rolni oldindan tanlab qo'yamiz.
   useEffect(() => {
-    if (searchParams.get("role") === "farmer") {
-      setValue("role", "farmer");
+    const fromUrl = searchParams.get("role");
+    if (fromUrl === "farmer" || fromUrl === "vet" || fromUrl === "investor") {
+      setValue("role", fromUrl);
     }
   }, [searchParams, setValue]);
 
@@ -69,35 +108,38 @@ function RegisterForm() {
         <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-2">
           Qaysi rolida a'zo bo'lasiz?
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setValue("role", "investor")}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all ${
-              selectedRole === "investor"
-                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold shadow-xs"
-                : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
-            }`}
-          >
-            <TrendingUp className="h-5 w-5 mb-1 text-emerald-600" />
-            <span className="text-sm font-bold">Investor</span>
-            <span className="text-[10px] opacity-75">Chorvaga sarmoya kiritish</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setValue("role", "farmer")}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all ${
-              selectedRole === "farmer"
-                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold shadow-xs"
-                : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
-            }`}
-          >
-            <Building2 className="h-5 w-5 mb-1 text-emerald-600" />
-            <span className="text-sm font-bold">Fermer</span>
-            <span className="text-[10px] opacity-75">Sarmoya jalb qilish</span>
-          </button>
+        <div className="grid grid-cols-3 gap-2">
+          {ROLE_OPTIONS.map(({ value, label, hint, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setValue("role", value)}
+              aria-pressed={selectedRole === value}
+              className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all ${
+                selectedRole === value
+                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold shadow-xs"
+                  : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+              }`}
+            >
+              <Icon className="h-5 w-5 mb-1 text-emerald-600" />
+              <span className="text-sm font-bold">{label}</span>
+              <span className="text-[10px] opacity-75 leading-tight">{hint}</span>
+            </button>
+          ))}
         </div>
+
+        {/* Veterinar tanlanganda kutilayotgan jarayonni oldindan tushuntiramiz —
+            aks holda hisob ochgach nega hech narsa qila olmasligi tushunarsiz bo'ladi. */}
+        {selectedRole === "vet" && (
+          <div className="mt-2 flex gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+            <Stethoscope className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+            <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+              Ro'yxatdan o'tgach profilingizda <b>litsenziya raqamini</b> kiriting.
+              Hisobot yozish va fermalarni tekshirish imkoniyati litsenziyangiz
+              administrator tomonidan tasdiqlangandan keyin ochiladi.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Full Name */}

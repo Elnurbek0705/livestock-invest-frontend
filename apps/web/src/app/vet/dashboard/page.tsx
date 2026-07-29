@@ -15,6 +15,8 @@ import {
 import { useAuthStore } from "@/lib/authStore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast/ToastProvider";
+import { FARM_VERIFICATION } from "@/lib/uz";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 export default function VetDashboardPage() {
   const router = useRouter();
@@ -28,6 +30,9 @@ export default function VetDashboardPage() {
 
   // Vet report modal
   const [selectedLivestockId, setSelectedLivestockId] = useState<string | null>(null);
+
+  // Modal ochiq turganda orqadagi sahifa scroll bo'lmasin
+  useScrollLock(selectedLivestockId !== null);
   const [reportForm, setReportForm] = useState({
     weightKg: 40,
     healthNotes: "Vaktsinatsiyadan o'tdi, parazitlarga qarshi dori berildi, ishtahasi va holati yaxshi.",
@@ -139,9 +144,9 @@ export default function VetDashboardPage() {
                   </div>
 
                   <div className="flex items-center justify-between text-xs pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 font-semibold">Status:</span>
-                    <span className="font-bold uppercase text-amber-600 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-md">
-                      {farm.verificationStatus}
+                    <span className="text-zinc-400 font-semibold">Holati:</span>
+                    <span className="font-bold text-amber-600 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-md">
+                      {FARM_VERIFICATION[farm.verificationStatus].label}
                     </span>
                   </div>
 

@@ -1,58 +1,74 @@
 import Link from "next/link";
-import { HeroSection } from "@/components/HeroSection";
+import { getApiClient } from "@livestock-invest/api-client";
+import type { Farm, Livestock } from "@livestock-invest/shared-types";
+import { ArrowRight } from "lucide-react";
+import { HeroSection, type MarketStats } from "@/components/HeroSection";
 import { MarketplacePreview } from "@/components/MarketplacePreview";
 import { HowItWorks } from "@/components/HowItWorks";
 import { RoiCalculator } from "@/components/RoiCalculator";
 import { FeaturesAndSecurity } from "@/components/FeaturesAndSecurity";
 import { FaqSection } from "@/components/FaqSection";
-import { Sprout, ArrowRight, ShieldCheck } from "lucide-react";
+import { sectionClass } from "@/components/landing/SectionHeading";
 
-export default function Home() {
+/**
+ * E'lonlar bir marta shu yerda olinadi va bo'limlarga tarqatiladi: ilgari
+ * bosh ekran ham, bozor namunasi ham alohida so'rov yuborardi.
+ */
+export default async function Home() {
+  let listings: Livestock[] = [];
+  let farms: Farm[] = [];
+
+  try {
+    const api = getApiClient();
+    [listings, farms] = await Promise.all([
+      api.livestock.list({ status: "listed" }),
+      api.farms.list(),
+    ]);
+  } catch {
+    // Backend yetib bormasa bosh sahifa baribir ochiladi — raqamlar o'rniga "—".
+  }
+
+  const stats: MarketStats | null =
+    listings.length > 0
+      ? {
+          count: listings.length,
+          minPrice: Math.min(...listings.map((item) => item.priceUzs)),
+          minShare: Math.min(
+            ...listings.map((item) => item.offeredInvestorSharePercent),
+          ),
+          maxShare: Math.max(
+            ...listings.map((item) => item.offeredInvestorSharePercent),
+          ),
+        }
+      : null;
+
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-      {/* 1. Hero Section */}
-      <HeroSection />
-
-      {/* 2. Live Marketplace Preview */}
-      <MarketplacePreview />
-
-      {/* 3. How It Works */}
+    <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <HeroSection stats={stats} />
+      <MarketplacePreview listings={listings} farms={farms} />
       <HowItWorks />
-
-      {/* 4. ROI Calculator */}
       <RoiCalculator />
-
-      {/* 5. Features & Security */}
       <FeaturesAndSecurity />
 
-      {/* 6. Farmer CTA Banner */}
-      <section className="my-16">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-8 sm:p-12 text-white shadow-xl">
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="space-y-3 text-center md:text-left max-w-2xl">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-emerald-200 text-xs font-bold border border-white/20">
-                <Sprout className="h-4 w-4" /> Fermerlar Uchun Imkoniyat
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Chorva Fermangiz Bormi? Sarmoyadorlarni Jalb Qiling!
-              </h2>
-              <p className="text-emerald-100 text-sm sm:text-base leading-relaxed">
-                Platformamizga fermer sifatida qo'shiling, fermangizni verifikatsiyadan o'tkazing va chorvangizni boqish uchun investorlar mablag'ini qonuniy jalb qiling.
-              </p>
-            </div>
-
-            <Link
-              href="/register?role=farmer"
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-900 font-extrabold text-sm sm:text-base shadow-lg transition-transform hover:scale-105 active:scale-95 flex-shrink-0"
-            >
-              Fermer Sifatida Ro'yxatdan O'tish
-              <ArrowRight className="h-5 w-5" />
-            </Link>
+      {/* Fermerlar uchun chaqiriq */}
+      <section className={sectionClass}>
+        <div className="flex flex-col items-start justify-between gap-4 rounded-2xl bg-emerald-800 p-6 text-white sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-lg font-bold">Fermangiz bormi?</h2>
+            <p className="mt-1 text-sm text-emerald-100">
+              Fermani tasdiqdan o'tkazing va chorvangizga sarmoya jalb qiling.
+            </p>
           </div>
+          <Link
+            href="/register?role=farmer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-emerald-900 transition-colors hover:bg-emerald-50"
+          >
+            Fermer bo'lib ro'yxatdan o'tish
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
-      {/* 7. FAQ Section */}
       <FaqSection />
     </main>
   );

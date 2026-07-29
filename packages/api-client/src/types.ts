@@ -3,13 +3,64 @@ import type {
   Farm,
   FarmVerificationStatus,
   Investment,
+  KycSubmission,
+  KycSubmissionStatus,
+  KycSubmissionWithUser,
   Livestock,
   LivestockStatus,
   MonthlyReport,
+  MyProfile,
+  PublicProfile,
+  RegisterableRole,
+  RoleProfile,
   Transaction,
   User,
+  UserRole,
+  VetProfile,
   VetReport,
 } from "@livestock-invest/shared-types";
+
+/**
+ * Rolga xos profil maydonlari. Backendda bitta DTO, lekin har bir maydon
+ * faqat MA'LUM bir rolga tegishli — begona maydon yuborilsa 400 qaytadi
+ * (users.service.ts, ROLE_PROFILE_FIELDS).
+ *
+ * Shuning uchun bu yerda ham rollar bo'yicha ajratilgan: aralash to'plam
+ * (masalan fermerning `region` i bilan investorning `targetBudgetUzs` i)
+ * birorta a'zoga ham mos kelmaydi va TypeScript darrov xato beradi —
+ * so'rov yuborilib, backenddan xato kutib o'tirilmaydi.
+ */
+export interface InvestorProfileUpdate {
+  bio?: string;
+  preferredRegions?: string[];
+  targetBudgetUzs?: number;
+  notifyOnNewListing?: boolean;
+  notifyOnMonthlyReport?: boolean;
+}
+
+export interface FarmerProfileUpdate {
+  bio?: string;
+  experienceYears?: number;
+  specialization?: string;
+  region?: string;
+  district?: string;
+}
+
+export interface VetProfileUpdate {
+  licenseNumber?: string;
+  /** YYYY-MM-DD */
+  licenseExpiresAt?: string;
+  specialization?: string;
+  experienceYears?: number;
+  organization?: string;
+  serviceRegions?: string[];
+}
+
+/** Admin roli uchun qo'shimcha profil maydonlari yo'q — backend 400 qaytaradi. */
+export type RoleProfileUpdate =
+  | InvestorProfileUpdate
+  | FarmerProfileUpdate
+  | VetProfileUpdate;
 
 /**
  * Bu interfeys "shartnoma" (contract) hisoblanadi.
@@ -26,11 +77,46 @@ export interface LivestockInvestApi {
       fullName: string;
       phone: string;
       email?: string;
-      role: "investor" | "farmer";
+      role: RegisterableRole;
       password: string;
     }): Promise<{ user: User; token: string }>;
     login(phone: string, password: string): Promise<{ user: User; token: string }>;
     me(): Promise<User | null>;
+  };
+
+  users: {
+    /** To'liq profil: umumiy maydonlar + rolga xos profil + KYC holati */
+    me(): Promise<MyProfile>;
+    /** Barcha rollar uchun umumiy maydonlar */
+    updateMe(input: {
+      fullName?: string;
+      /** +998XXXXXXXXX — bu ayni paytda login identifikatori */
+      phone?: string;
+      email?: string;
+      avatarUrl?: string;
+    }): Promise<User>;
+    changePassword(input: {
+      currentPassword: string;
+      /** kamida 8 ta belgi, joridan farq qilishi shart */
+      newPassword: string;
+    }): Promise<{ message: string }>;
+    /** Rolga xos maydonlar — foydalanuvchining roliga mos to'plamni yuboring */
+    updateRoleProfile(input: RoleProfileUpdate): Promise<RoleProfile>;
+    submitKyc(input: {
+      /** "AA1234567" */
+      passportSeries: string;
+      /** 14 xonali JSHSHIR */
+      pinfl: string;
+      /** YYYY-MM-DD */
+      birthDate: string;
+      passportPhotoUrl: string;
+      /** Pasportni qo'lda ushlagan holdagi selfie */
+      selfiePhotoUrl: string;
+    }): Promise<KycSubmission>;
+    /** O'z arizalari tarixi, eng yangisi birinchi */
+    myKycHistory(): Promise<KycSubmission[]>;
+    /** Boshqa foydalanuvchining ochiq profili (marketplace'da fermer/vet) */
+    getPublicProfile(id: string): Promise<PublicProfile | null>;
   };
 
   farms: {
@@ -81,8 +167,22 @@ export interface LivestockInvestApi {
 
   admin: {
     getDashboard(): Promise<AdminDashboard>;
-    listUsers(role?: string): Promise<User[]>;
-    updateUserRole(userId: string, role: string): Promise<User>;
+    listUsers(role?: UserRole): Promise<User[]>;
+    /** Adminni tayinlash/tushirish faqat super-adminga ochiq */
+    updateUserRole(userId: string, role: UserRole): Promise<User>;
+    /** false — hisobni bloklash. O'z hisobini bloklab bo'lmaydi. */
+    setUserActive(userId: string, isActive: boolean): Promise<User>;
+    listKyc(status?: KycSubmissionStatus): Promise<KycSubmissionWithUser[]>;
+    reviewKyc(
+      submissionId: string,
+      input: {
+        status: "approved" | "rejected";
+        /** Rad etilganda MAJBURIY — kamida 5 ta belgi */
+        rejectionReason?: string;
+      },
+    ): Promise<KycSubmission>;
+    /** Tasdiqlanmagan vet hisobot ham yoza olmaydi, ferma ham tekshira olmaydi */
+    verifyVetLicense(vetUserId: string, isVerified: boolean): Promise<VetProfile>;
   };
 }
 

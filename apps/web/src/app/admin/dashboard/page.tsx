@@ -1,414 +1,595 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  Building2,
+  Coins,
+  LayoutDashboard,
+  ListChecks,
+  ShieldCheck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { getApiClient } from "@livestock-invest/api-client";
-import type { AdminDashboard, User, Farm, Investment } from "@livestock-invest/shared-types";
+import type {
+  AdminDashboard,
+  Farm,
+  Investment,
+  User,
+  UserRole,
+} from "@livestock-invest/shared-types";
+import { useAuthStore } from "@/lib/authStore";
+import { errorText } from "@/lib/apiError";
+import { useToast } from "@/components/Toast/ToastProvider";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { PageTransition } from "@/components/PageTransition";
 import {
-  ShieldAlert,
-  Coins,
-  Building2,
-  Users,
-  CheckCircle2,
-  ArrowRight,
-  TrendingUp,
-  XCircle,
-  Loader2,
-} from "lucide-react";
-import { useAuthStore } from "@/lib/authStore";
-import { useRouter } from "next/navigation";
+  EmptyState,
+  Panel,
+  PanelHeader,
+  SkeletonRows,
+  StatTile,
+  StatusChip,
+} from "@/components/dashboard/primitives";
+import {
+  DashboardNav,
+  type DashboardNavItem,
+} from "@/components/dashboard/DashboardNav";
+import {
+  InvestmentQueue,
+  type QueueDefinition,
+  type QueueKey,
+} from "@/components/admin/InvestmentQueue";
+import { UsersTable } from "@/components/admin/UsersTable";
+import { SaleAmountModal } from "@/components/admin/SaleAmountModal";
+import {
+  FARM_VERIFICATION,
+  USER_ROLE,
+  formatUzsCompact,
+} from "@/lib/uz";
+
+type TabKey = "overview" | "farms" | "investments" | "users";
+
+/**
+ * Tasdiqlash kutayotgan amal.
+ *
+ * Bu yerdagi amallarning barchasi pul yoki huquq bilan bog'liq va ortga
+ * qaytmaydi, shuning uchun hech biri to'g'ridan-to'g'ri bajarilmaydi —
+ * avval ConfirmModal ochiladi. Ilgari brauzerning `confirm()` va `alert()`
+ * oynalari ishlatilgan edi; ular kabinetning qolgan qismidan uzilib turardi.
+ */
+type PendingAction =
+  | { kind: "verifyFarm"; farm: Farm; approve: boolean }
+  | { kind: "releaseEscrow"; investment: Investment }
+  | { kind: "completePayout"; investment: Investment }
+  | { kind: "changeRole"; user: User; role: UserRole };
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const currentUser = useAuthStore((s) => s.user);
+  const toast = useToast();
+  const currentUser = useAuthStore((state) => state.user);
+  const isAuthInitialized = useAuthStore((state) => state.isInitialized);
 
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeRoleTab, setActiveRoleTab] = useState<"all" | "farmer" | "investor" | "admin" | "vet">("all");
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Complete Sale modal state
-  const [saleModalInvestmentId, setSaleModalInvestmentId] = useState<string | null>(null);
-  const [saleAmountUzs, setSaleAmountUzs] = useState<number>(5000000);
+  const [tab, setTab] = useState<TabKey>("overview");
+  const [queue, setQueue] = useState<QueueKey>("escrow");
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [saleTarget, setSaleTarget] = useState<Investment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadAdminData = async () => {
-    setIsLoading(true);
-    setError(null);
+  const isLoading = !hasLoadedOnce;
+
+  const loadAdminData = useCallback(async () => {
+    setIsRefreshing(true);
+    setLoadError(null);
     try {
       const api = getApiClient();
-      const [dashData, userList] = await Promise.all([
+      const [dashboardData, userList] = await Promise.all([
         api.admin.getDashboard(),
         api.admin.listUsers(),
       ]);
-      setDashboard(dashData);
+      setDashboard(dashboardData);
       setUsers(userList);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Admin ma'lumotlarini yuklab bo'lmadi");
+    } catch (error) {
+      setLoadError(errorText(error, "Admin ma'lumotlarini yuklab bo'lmadi"));
     } finally {
-      setIsLoading(false);
+      setHasLoadedOnce(true);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (currentUser && currentUser.role !== "admin") {
+    if (!isAuthInitialized) return;
+    if (!currentUser) {
+      router.push("/login");
+      return;
+    }
+    if (currentUser.role !== "admin") {
       router.push("/");
       return;
     }
     loadAdminData();
-  }, [currentUser]);
+  }, [isAuthInitialized, currentUser, router, loadAdminData]);
 
-  // Actions
-  const handleVerifyFarm = async (farmId: string, status: "platform_approved" | "rejected") => {
-    try {
-      const api = getApiClient();
-      await api.farms.verify(farmId, status);
-      await loadAdminData();
-      alert(`Ferma ${status === "platform_approved" ? "tasdiqlandi" : "rad etildi"}!`);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Xatolik yuz berdi");
-    }
-  };
+  // ---- Hosila qiymatlar ---------------------------------------------------
+  const queues: QueueDefinition[] = useMemo(() => {
+    const investments = dashboard?.investments;
+    return [
+      {
+        key: "escrow",
+        label: "Escrow chiqarish",
+        hint: "Fermer parvarishni boshladi — kafolat hisobidagi pulni unga o'tkazish mumkin.",
+        actionLabel: "Fermerga o'tkazish",
+        items: investments?.awaitingEscrowRelease ?? [],
+      },
+      {
+        key: "sale",
+        label: "Sotuvni yakunlash",
+        hint: "Chorva sotuvga tayyor — bozordagi sotuv summasini kiritish kerak.",
+        actionLabel: "Sotuv summasi",
+        items: investments?.awaitingSaleCompletion ?? [],
+      },
+      {
+        key: "payout",
+        label: "Foydani taqsimlash",
+        hint: "Sotuv yakunlandi — foydani investor va fermer o'rtasida taqsimlash qoldi.",
+        actionLabel: "Taqsimlash",
+        items: investments?.awaitingPayout ?? [],
+      },
+    ];
+  }, [dashboard]);
 
-  const handleReleaseEscrow = async (investmentId: string) => {
-    if (!confirm("Escrow pulini fermerga o'tkazishni tasdiqlaysizmi?")) return;
-    try {
-      const api = getApiClient();
-      await api.investments.releaseToFarmer(investmentId);
-      await loadAdminData();
-      alert("Escrow puli fermerga o'tkazildi!");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Escrow chiqarishda xatolik");
-    }
-  };
+  const queueTotal = useMemo(
+    () => queues.reduce((sum, item) => sum + item.items.length, 0),
+    [queues],
+  );
 
-  const handleCompleteSaleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!saleModalInvestmentId) return;
+  const pendingFarms = dashboard?.farms.pending ?? [];
+  const pendingKycCount = dashboard?.kyc.pendingCount ?? 0;
+
+  // ---- Amallar ------------------------------------------------------------
+  const runAction = async (
+    action: () => Promise<unknown>,
+    successMessage: string,
+    fallbackError: string,
+  ) => {
     setIsSubmitting(true);
     try {
-      const api = getApiClient();
-      await api.investments.completeSale(saleModalInvestmentId, { saleAmountUzs });
-      setSaleModalInvestmentId(null);
+      await action();
+      setPendingAction(null);
+      setSaleTarget(null);
+      toast.success(successMessage, "Bajarildi");
       await loadAdminData();
-      alert("Sotuv yakunlandi va foyda hisoblandi!");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Sotuvni yakunlashda xatolik");
+    } catch (error) {
+      toast.error(errorText(error, fallbackError), "Xatolik");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCompletePayout = async (investmentId: string) => {
-    if (!confirm("Investor va fermerga foyda taqsimotini tasdiqlaysizmi?")) return;
-    try {
-      const api = getApiClient();
-      await api.investments.completePayout(investmentId);
-      await loadAdminData();
-      alert("Foyda taqsimoti yakunlandi!");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Payout bajarishda xatolik");
+  const handleConfirm = () => {
+    if (!pendingAction) return;
+    const api = getApiClient();
+
+    switch (pendingAction.kind) {
+      case "verifyFarm":
+        return runAction(
+          () =>
+            api.farms.verify(
+              pendingAction.farm.id,
+              pendingAction.approve ? "platform_approved" : "rejected",
+            ),
+          pendingAction.approve
+            ? `«${pendingAction.farm.name}» tasdiqlandi.`
+            : `«${pendingAction.farm.name}» rad etildi.`,
+          "Fermani tekshirishda xatolik",
+        );
+      case "releaseEscrow":
+        return runAction(
+          () => api.investments.releaseToFarmer(pendingAction.investment.id),
+          "Kafolat hisobidagi mablag' fermerga o'tkazildi.",
+          "Escrow chiqarishda xatolik",
+        );
+      case "completePayout":
+        return runAction(
+          () => api.investments.completePayout(pendingAction.investment.id),
+          "Foyda taqsimoti yakunlandi.",
+          "Taqsimotda xatolik",
+        );
+      case "changeRole":
+        return runAction(
+          () => api.admin.updateUserRole(pendingAction.user.id, pendingAction.role),
+          `${pendingAction.user.fullName} endi ${USER_ROLE[pendingAction.role]}.`,
+          "Rolni o'zgartirishda xatolik",
+        );
     }
   };
 
-  const handleChangeRole = async (userId: string, role: string) => {
-    try {
-      const api = getApiClient();
-      await api.admin.updateUserRole(userId, role);
-      await loadAdminData();
-      alert("Foydalanuvchi roli yangilandi!");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Rolni o'zgartirishda xatolik");
-    }
+  const handleQueueAction = (key: QueueKey, investment: Investment) => {
+    if (key === "escrow") setPendingAction({ kind: "releaseEscrow", investment });
+    else if (key === "payout") setPendingAction({ kind: "completePayout", investment });
+    else setSaleTarget(investment);
   };
 
-  const filteredUsers = users.filter((user) => {
-    if (activeRoleTab === "all") return true;
-    return user.role === activeRoleTab;
-  });
+  const confirmCopy = useMemo(() => {
+    if (!pendingAction) return null;
+    switch (pendingAction.kind) {
+      case "verifyFarm":
+        return pendingAction.approve
+          ? {
+              type: "success" as const,
+              title: `«${pendingAction.farm.name}» tasdiqlansinmi?`,
+              description:
+                "Ferma tasdiqlangach fermer bozorga qo'zi e'lonlarini joylashtira boshlaydi.",
+              confirmText: "Ha, tasdiqlansin",
+            }
+          : {
+              type: "danger" as const,
+              title: `«${pendingAction.farm.name}» rad etilsinmi?`,
+              description:
+                "Ferma rad etiladi va fermer qo'zi qo'sha olmaydi. Qarorni fermerga sabab bilan yetkazish tavsiya etiladi.",
+              confirmText: "Ha, rad etilsin",
+            };
+      case "releaseEscrow":
+        return {
+          type: "warning" as const,
+          title: "Mablag' fermerga o'tkazilsinmi?",
+          description:
+            "Kafolat hisobidagi pul fermerga o'tadi. Bu pul harakatini ortga qaytarib bo'lmaydi.",
+          confirmText: "Ha, o'tkazilsin",
+        };
+      case "completePayout":
+        return {
+          type: "warning" as const,
+          title: "Foyda taqsimlansinmi?",
+          description:
+            "Investor va fermer ulushlari hisoblariga o'tkaziladi. Bu qadam yakuniy — ortga qaytarilmaydi.",
+          confirmText: "Ha, taqsimlansin",
+        };
+      case "changeRole":
+        return {
+          type: "warning" as const,
+          title: "Rol o'zgartirilsinmi?",
+          description: `${pendingAction.user.fullName} uchun rol «${USER_ROLE[pendingAction.user.role]}» dan «${USER_ROLE[pendingAction.role]}» ga o'zgaradi. Bu foydalanuvchining kirish huquqlarini darhol o'zgartiradi.`,
+          confirmText: "Ha, o'zgartirilsin",
+        };
+    }
+  }, [pendingAction]);
 
-  const roleTabs = [
-    { key: "all", label: "Barchasi", count: users.length },
-    { key: "farmer", label: "Farmerlar", count: users.filter((user) => user.role === "farmer").length },
-    { key: "investor", label: "Investorlar", count: users.filter((user) => user.role === "investor").length },
-    { key: "admin", label: "Adminlar", count: users.filter((user) => user.role === "admin").length },
-    { key: "vet", label: "VET", count: users.filter((user) => user.role === "vet").length },
-  ] as const;
+  // ---- Ko'rinish ----------------------------------------------------------
+  const navItems: DashboardNavItem<TabKey>[] = [
+    { key: "overview", label: "Umumiy ko'rinish", icon: LayoutDashboard },
+    { key: "farms", label: "Fermalar", icon: Building2, badge: pendingFarms.length },
+    { key: "investments", label: "Bitimlar navbati", icon: Coins, badge: queueTotal },
+    { key: "users", label: "Foydalanuvchilar", icon: Users, badge: users.length },
+  ];
 
   return (
     <PageTransition>
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-zinc-900 via-zinc-900 to-emerald-950 p-8 sm:p-10 text-white shadow-xl border border-emerald-500/20">
-          <div className="relative z-10 space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1 text-xs font-bold text-emerald-400">
-              <ShieldAlert className="h-3.5 w-3.5" /> Platforma Boshqaruv Markazi
-            </div>
-            <h1 className="text-3xl font-extrabold text-white">Admin Dashboard</h1>
-            <p className="text-zinc-400 text-sm">
-              Moliya oqimlari, Escrow chiqarish, sotuv va payout bosqichlari va foydalanuvchilar boshqaruvi.
-            </p>
-          </div>
+      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+            Administrator kabineti
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-stone-900 dark:text-white">
+            {currentUser?.fullName ?? "Boshqaruv markazi"}
+          </h1>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            Ferma tasdiqlari, escrow oqimi va foydalanuvchilar bir joyda.
+          </p>
         </div>
 
-        {isLoading && <p className="text-center text-zinc-500 py-8">Yuklanmoqda...</p>}
-        {error && <div className="p-4 rounded-2xl bg-red-50 text-red-700 text-sm">{error}</div>}
-
-        {dashboard && (
-          <>
-            {/* Finance Overview Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-2">
-                <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <Coins className="h-4 w-4 text-emerald-600" />
-                  Muzlatilgan Escrow Summasi
-                </span>
-                <div className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-                  {dashboard.finance.totalEscrowHeldUzs.toLocaleString("uz-UZ")} so'm
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-2">
-                <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  Platforma Komissiyasi (Fee)
-                </span>
-                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {dashboard.finance.totalPlatformFeeCollectedUzs.toLocaleString("uz-UZ")} so'm
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-2">
-                <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  Taqsimlangan Payoutlar
-                </span>
-                <div className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-                  {dashboard.finance.totalPayoutsCompletedUzs.toLocaleString("uz-UZ")} so'm
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Farms Approval Section */}
-            <section className="space-y-4 pt-4">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-emerald-600" />
-                Platforma Tasdig'ini Kutayotgan Fermalar ({dashboard.farms.pendingCount})
-              </h2>
-
-              {dashboard.farms.pending.length === 0 ? (
-                <p className="text-xs text-zinc-500 bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                  Tasdiqlanishi kutilayotgan fermalar yo'q.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {dashboard.farms.pending.map((farm) => (
-                    <div
-                      key={farm.id}
-                      className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-4"
-                    >
-                      <div>
-                        <h4 className="font-bold text-zinc-900 dark:text-white">{farm.name}</h4>
-                        <p className="text-xs text-zinc-500">
-                          {farm.region} | Status: {farm.verificationStatus}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleVerifyFarm(farm.id, "platform_approved")}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500"
-                        >
-                          Tasdiqlash
-                        </button>
-                        <button
-                          onClick={() => handleVerifyFarm(farm.id, "rejected")}
-                          className="px-3 py-1.5 rounded-xl border border-red-300 text-red-600 text-xs font-bold hover:bg-red-50"
-                        >
-                          Rad Etish
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Escrow & Payout Action Queue */}
-            <section className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Coins className="h-5 w-5 text-emerald-600" />
-                Investitsiya va Escrow Boshqaruvi
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* 1. Awaiting Escrow Release */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-3">
-                  <h3 className="font-bold text-sm text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                    1. Fermerga Escrow Chiqarish ({dashboard.investments.awaitingEscrowReleaseCount})
-                  </h3>
-                  {dashboard.investments.awaitingEscrowRelease.map((inv) => (
-                    <div key={inv.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl space-y-2 text-xs">
-                      <div className="flex justify-between font-bold">
-                        <span>Bitim ID: {inv.id.slice(0, 6)}</span>
-                        <span>{inv.amountUzs.toLocaleString("uz-UZ")} so'm</span>
-                      </div>
-                      <button
-                        onClick={() => handleReleaseEscrow(inv.id)}
-                        className="w-full py-1.5 bg-emerald-600 text-white rounded-lg font-bold"
-                      >
-                        Fermerga Chiqarish
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 2. Awaiting Sale Completion */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-3">
-                  <h3 className="font-bold text-sm text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                    2. Sotuvni Yakunlash ({dashboard.investments.awaitingSaleCompletionCount})
-                  </h3>
-                  {dashboard.investments.awaitingSaleCompletion.map((inv) => (
-                    <div key={inv.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl space-y-2 text-xs">
-                      <div className="flex justify-between font-bold">
-                        <span>Bitim ID: {inv.id.slice(0, 6)}</span>
-                        <span>{inv.amountUzs.toLocaleString("uz-UZ")} so'm</span>
-                      </div>
-                      <button
-                        onClick={() => setSaleModalInvestmentId(inv.id)}
-                        className="w-full py-1.5 bg-emerald-600 text-white rounded-lg font-bold"
-                      >
-                        Sotuvni Kiritish
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 3. Awaiting Payout */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-3">
-                  <h3 className="font-bold text-sm text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                    3. Foydani Taqsimlash (Payout) ({dashboard.investments.awaitingPayoutCount})
-                  </h3>
-                  {dashboard.investments.awaitingPayout.map((inv) => (
-                    <div key={inv.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl space-y-2 text-xs">
-                      <div className="flex justify-between font-bold">
-                        <span>Bitim ID: {inv.id.slice(0, 6)}</span>
-                        <span>Foyda: {inv.investorShareUzs?.toLocaleString("uz-UZ")} so'm</span>
-                      </div>
-                      <button
-                        onClick={() => handleCompletePayout(inv.id)}
-                        className="w-full py-1.5 bg-purple-600 text-white rounded-lg font-bold"
-                      >
-                        Payout Bajarish
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            {/* User Roles Management */}
-            <section className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Users className="h-5 w-5 text-emerald-600" />
-                Foydalanuvchilar Rollarini Boshqarish ({users.length})
-              </h2>
-
-              <div className="flex flex-wrap gap-2">
-                {roleTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveRoleTab(tab.key)}
-                    className={`rounded-full px-3.5 py-2 text-sm font-semibold transition-all ${
-                      activeRoleTab === tab.key
-                        ? "bg-emerald-600 text-white shadow-md"
-                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                    }`}
-                  >
-                    {tab.label} ({tab.count})
-                  </button>
-                ))}
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-50 text-zinc-500 uppercase dark:bg-zinc-800/50">
-                    <tr>
-                      <th className="p-3">Ism Familiya</th>
-                      <th className="p-3">Telefon</th>
-                      <th className="p-3">Roli</th>
-                      <th className="p-3">KYC Status</th>
-                      <th className="p-3">Amal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {filteredUsers.map((u) => (
-                      <tr key={u.id}>
-                        <td className="p-3 font-bold text-zinc-900 dark:text-white">{u.fullName}</td>
-                        <td className="p-3 text-zinc-500">{u.phone}</td>
-                        <td className="p-3">
-                          <span className="capitalize font-bold text-emerald-600">{u.role}</span>
-                        </td>
-                        <td className="p-3 capitalize text-zinc-400">{u.kycStatus}</td>
-                        <td className="p-3">
-                          <select
-                            value={u.role}
-                            onChange={(e) => handleChangeRole(u.id, e.target.value)}
-                            className="rounded-lg border border-zinc-300 p-1 text-xs font-bold dark:border-zinc-700"
-                          >
-                            <option value="investor">investor</option>
-                            <option value="farmer">farmer</option>
-                            <option value="vet">vet</option>
-                            <option value="admin">admin</option>
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
-        )}
-
-        {/* Modal: Complete Sale Amount */}
-        {saleModalInvestmentId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-4 text-sm">
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Sotuv Summasini Kiriting</h3>
-              <form onSubmit={handleCompleteSaleSubmit} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Bozor Sotuv Summasi (UZS)</label>
-                  <input
-                    type="number"
-                    required
-                    value={saleAmountUzs}
-                    onChange={(e) => setSaleAmountUzs(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSaleModalInvestmentId(null)}
-                    className="w-full py-2.5 rounded-xl border border-zinc-300 text-zinc-700 font-bold"
-                  >
-                    Bekor Qilish
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 text-white font-bold"
-                  >
-                    Saqlash
-                  </button>
-                </div>
-              </form>
+        {loadError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Ma'lumotlarni yuklab bo'lmadi</p>
+              <p className="mt-0.5 text-xs">{loadError}</p>
+              <button
+                type="button"
+                onClick={loadAdminData}
+                className="mt-2 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950"
+              >
+                Qayta urinish
+              </button>
             </div>
           </div>
         )}
+
+        <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
+          <DashboardNav items={navItems} active={tab} onSelect={setTab} />
+
+          <div
+            className={`min-w-0 space-y-6 transition-opacity duration-200 ${
+              isRefreshing && hasLoadedOnce ? "opacity-60" : "opacity-100"
+            }`}
+          >
+            {/* ---------------- Umumiy ko'rinish ---------------- */}
+            {tab === "overview" && (
+              <>
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <StatTile
+                    icon={Wallet}
+                    label="Kafolat hisobida"
+                    value={
+                      dashboard
+                        ? formatUzsCompact(dashboard.finance.totalEscrowHeldUzs)
+                        : "—"
+                    }
+                    hint="Hali fermerga o'tkazilmagan"
+                    accent
+                  />
+                  <StatTile
+                    icon={Coins}
+                    label="Platforma komissiyasi"
+                    value={
+                      dashboard
+                        ? formatUzsCompact(
+                            dashboard.finance.totalPlatformFeeCollectedUzs,
+                          )
+                        : "—"
+                    }
+                    hint="Yakunlangan sotuvlardan"
+                  />
+                  <StatTile
+                    icon={ShieldCheck}
+                    label="Taqsimlangan to'lovlar"
+                    value={
+                      dashboard
+                        ? formatUzsCompact(dashboard.finance.totalPayoutsCompletedUzs)
+                        : "—"
+                    }
+                    hint="Investor va fermerlarga"
+                  />
+                  <StatTile
+                    icon={ListChecks}
+                    label="Kutilayotgan amallar"
+                    value={String(queueTotal + pendingFarms.length)}
+                    hint="Navbat sizda"
+                  />
+                </div>
+
+                <Panel>
+                  <PanelHeader
+                    icon={AlertTriangle}
+                    title="Sizning e'tiboringizni kutmoqda"
+                    subtitle="Navbat administratorda bo'lgan ishlar"
+                  />
+                  {isLoading ? (
+                    <SkeletonRows rows={3} />
+                  ) : (
+                    <div className="divide-y divide-stone-100 dark:divide-stone-800">
+                      {pendingFarms.length > 0 && (
+                        <AttentionRow
+                          title={`${pendingFarms.length} ta ferma tasdiq kutmoqda`}
+                          description="Tasdiqlanmagan ferma bozorga qo'zi chiqara olmaydi."
+                          actionLabel="Fermalarga o'tish"
+                          onAction={() => setTab("farms")}
+                        />
+                      )}
+                      {queues
+                        .filter((item) => item.items.length > 0)
+                        .map((item) => (
+                          <AttentionRow
+                            key={item.key}
+                            title={`${item.items.length} ta bitim: ${item.label.toLowerCase()}`}
+                            description={item.hint}
+                            actionLabel="Navbatni ochish"
+                            onAction={() => {
+                              setQueue(item.key);
+                              setTab("investments");
+                            }}
+                          />
+                        ))}
+                      {pendingKycCount > 0 && (
+                        <AttentionRow
+                          title={`${pendingKycCount} ta shaxs tasdig'i (KYC) ko'rib chiqilmagan`}
+                          description="KYC arizalarini tasdiqlash hozircha interfeysda emas — backend orqali bajariladi."
+                          actionLabel="Foydalanuvchilar"
+                          onAction={() => setTab("users")}
+                        />
+                      )}
+                      {pendingFarms.length === 0 &&
+                        queueTotal === 0 &&
+                        pendingKycCount === 0 && (
+                          <p className="px-5 py-8 text-center text-xs text-stone-500 dark:text-stone-400">
+                            Hozircha sizdan talab qilinadigan amal yo'q.
+                          </p>
+                        )}
+                    </div>
+                  )}
+                </Panel>
+              </>
+            )}
+
+            {/* ---------------- Fermalar ---------------- */}
+            {tab === "farms" && (
+              <Panel className="overflow-hidden">
+                <PanelHeader
+                  icon={Building2}
+                  title="Tasdiq kutayotgan fermalar"
+                  subtitle="Veterinar xulosasidan keyingi yakuniy platforma tasdig'i"
+                />
+                {isLoading ? (
+                  <SkeletonRows rows={4} />
+                ) : pendingFarms.length === 0 ? (
+                  <EmptyState
+                    icon={Building2}
+                    title="Navbat bo'sh"
+                    description="Hozir platforma tasdig'ini kutayotgan ferma yo'q."
+                  />
+                ) : (
+                  <ul className="divide-y divide-stone-100 dark:divide-stone-800">
+                    {pendingFarms.map((farm) => {
+                      const meta = FARM_VERIFICATION[farm.verificationStatus];
+                      return (
+                        <li
+                          key={farm.id}
+                          className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
+                                {farm.name}
+                              </h3>
+                              <StatusChip
+                                label={meta.label}
+                                colorVar={
+                                  meta.tone === "progress" ? "--stage-1" : "--stage-off"
+                                }
+                                size="sm"
+                              />
+                            </div>
+                            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                              {farm.region}
+                              {farm.district ? `, ${farm.district}` : ""} · ★{" "}
+                              <span className="tabular-nums">{farm.rating}</span>
+                            </p>
+                            <p className="mt-1.5 max-w-lg text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                              {meta.description}
+                            </p>
+                          </div>
+
+                          <div className="flex shrink-0 gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPendingAction({ kind: "verifyFarm", farm, approve: true })
+                              }
+                              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                            >
+                              Tasdiqlash
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPendingAction({
+                                  kind: "verifyFarm",
+                                  farm,
+                                  approve: false,
+                                })
+                              }
+                              className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 dark:border-stone-700 dark:hover:bg-red-950/40"
+                            >
+                              Rad etish
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Panel>
+            )}
+
+            {/* ---------------- Bitimlar navbati ---------------- */}
+            {tab === "investments" && (
+              <Panel className="overflow-hidden">
+                <PanelHeader
+                  icon={Coins}
+                  title="Bitimlar navbati"
+                  subtitle="Escrow, sotuv va foyda taqsimoti bosqichlari"
+                />
+                {isLoading ? (
+                  <SkeletonRows rows={5} />
+                ) : (
+                  <InvestmentQueue
+                    queues={queues}
+                    active={queue}
+                    onSelect={setQueue}
+                    onAct={handleQueueAction}
+                    isBusy={isSubmitting}
+                  />
+                )}
+              </Panel>
+            )}
+
+            {/* ---------------- Foydalanuvchilar ---------------- */}
+            {tab === "users" && (
+              <Panel className="overflow-hidden">
+                <PanelHeader
+                  icon={Users}
+                  title="Foydalanuvchilar"
+                  subtitle="Rolni o'zgartirish darhol kuchga kiradi"
+                />
+                {isLoading ? (
+                  <SkeletonRows rows={6} />
+                ) : (
+                  <UsersTable
+                    users={users}
+                    onRequestRoleChange={(user, role) =>
+                      setPendingAction({ kind: "changeRole", user, role })
+                    }
+                  />
+                )}
+              </Panel>
+            )}
+          </div>
+        </div>
       </main>
+
+      <SaleAmountModal
+        investment={saleTarget}
+        isSubmitting={isSubmitting}
+        onClose={() => setSaleTarget(null)}
+        onSubmit={(saleAmountUzs) =>
+          saleTarget &&
+          runAction(
+            () =>
+              getApiClient().investments.completeSale(saleTarget.id, { saleAmountUzs }),
+            "Sotuv yakunlandi va foyda hisoblandi.",
+            "Sotuvni yakunlashda xatolik",
+          )
+        }
+      />
+
+      {pendingAction && confirmCopy && (
+        <ConfirmModal
+          isOpen
+          type={confirmCopy.type}
+          title={confirmCopy.title}
+          description={confirmCopy.description}
+          confirmText={confirmCopy.confirmText}
+          isSubmitting={isSubmitting}
+          onConfirm={handleConfirm}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
     </PageTransition>
+  );
+}
+
+function AttentionRow({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-stone-900 dark:text-white">{title}</p>
+        <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{description}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onAction}
+        className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
+      >
+        {actionLabel}
+      </button>
+    </div>
   );
 }

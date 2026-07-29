@@ -4,6 +4,18 @@
 
 export type UserRole = "investor" | "farmer" | "vet" | "admin";
 
+/**
+ * Ro'yxatdan o'tish formasida tanlash mumkin bo'lgan rollar.
+ *
+ * "admin" bu ro'yxatda ATAYLAB yo'q — admin rolini faqat mavjud super-admin
+ * `PATCH /admin/users/:id/role` orqali bera oladi.
+ *
+ * "vet" ochiq: veterinar hisob ochgani bilan hech qanday ta'sirchan amalni
+ * bajara olmaydi — hisobot yozish ham, ferma tekshirish ham litsenziyasi
+ * admin tomonidan tasdiqlanishini talab qiladi.
+ */
+export type RegisterableRole = Exclude<UserRole, "admin">;
+
 export type KycStatus = "not_submitted" | "pending" | "approved" | "rejected";
 
 export interface User {
@@ -12,9 +24,136 @@ export interface User {
   fullName: string;
   phone: string;
   email?: string | null;
+  avatarUrl?: string | null;
   kycStatus: KycStatus;
   isSuperAdmin?: boolean;
+  /** false — hisob bloklangan, login ishlamaydi */
+  isActive?: boolean;
   createdAt: string;
+  updatedAt?: string;
+}
+
+// ============================================================
+// Rolga xos profillar (GET /users/me → profile)
+// ============================================================
+
+export interface InvestorProfile {
+  id: string;
+  userId: string;
+  bio?: string | null;
+  preferredRegions: string[];
+  targetBudgetUzs?: number | null;
+  /** "Premium Investor" obunasi */
+  isPremium: boolean;
+  premiumExpiresAt?: string | null;
+  notifyOnNewListing: boolean;
+  notifyOnMonthlyReport: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FarmerProfile {
+  id: string;
+  userId: string;
+  bio?: string | null;
+  experienceYears?: number | null;
+  specialization?: string | null;
+  region?: string | null;
+  district?: string | null;
+  /** "Premium Fermer" obunasi */
+  isPremium: boolean;
+  premiumExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VetProfile {
+  id: string;
+  userId: string;
+  licenseNumber?: string | null;
+  /** YYYY-MM-DD */
+  licenseExpiresAt?: string | null;
+  specialization?: string | null;
+  experienceYears?: number | null;
+  organization?: string | null;
+  serviceRegions: string[];
+  /**
+   * Faqat admin o'zgartiradi. false bo'lsa vet hisobot yoza olmaydi.
+   * licenseNumber o'zgartirilsa avtomatik false ga qaytadi.
+   */
+  isLicenseVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RoleProfile =
+  | InvestorProfile
+  | FarmerProfile
+  | VetProfile
+  | null; // admin uchun alohida profil yo'q
+
+// ============================================================
+// KYC — shaxsni tasdiqlash
+// ============================================================
+
+export type KycSubmissionStatus = "pending" | "approved" | "rejected";
+
+export interface KycSubmission {
+  id: string;
+  userId: string;
+  /** "AA1234567" */
+  passportSeries: string;
+  /** 14 xonali JSHSHIR */
+  pinfl: string;
+  /** YYYY-MM-DD */
+  birthDate: string;
+  passportPhotoUrl: string;
+  selfiePhotoUrl: string;
+  status: KycSubmissionStatus;
+  rejectionReason?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Admin ro'yxatlarida ariza egasi ham birga keladi (backend `kyc.user` ni
+ * JOIN qiladi). Adminga ism kerak — bitta UUID bilan arizani baholab
+ * bo'lmaydi.
+ */
+export interface KycSubmissionWithUser extends KycSubmission {
+  user: User;
+}
+
+/** GET /users/me javobi */
+export interface MyProfile {
+  user: User;
+  profile: RoleProfile;
+  kyc: {
+    status: KycStatus;
+    latestSubmission: KycSubmission | null;
+  };
+}
+
+/** GET /users/:id javobi — boshqa foydalanuvchining ochiq profili */
+export interface PublicProfile {
+  id: string;
+  fullName: string;
+  avatarUrl?: string | null;
+  role: UserRole;
+  isKycVerified: boolean;
+  createdAt: string;
+  // Fermer uchun qo'shimcha
+  bio?: string | null;
+  experienceYears?: number | null;
+  specialization?: string | null;
+  region?: string | null;
+  district?: string | null;
+  isPremium?: boolean;
+  // Vet uchun qo'shimcha
+  organization?: string | null;
+  serviceRegions?: string[];
+  isLicenseVerified?: boolean;
 }
 
 // ============================================================
@@ -134,6 +273,10 @@ export interface AdminDashboard {
   farms: {
     pendingCount: number;
     pending: Farm[];
+  };
+  kyc: {
+    pendingCount: number;
+    pending: KycSubmissionWithUser[];
   };
   investments: {
     awaitingEscrowReleaseCount: number;
