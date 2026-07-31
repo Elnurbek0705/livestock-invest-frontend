@@ -12,6 +12,11 @@
  * Chiziq oxirigacha yetmaydi, 90% da to'xtaydi: qancha kutish qolganini
  * bilmaymiz, soxta aniqlik ko'rsatishdan ko'ra to'xtab turgani halolroq.
  * Tugagach 100% ga sakraydi va so'niydi.
+ *
+ * Nega Next'ning `useLinkStatus` i emas: u "must be used within a descendant
+ * component of a `Link`" (Next 16 hujjati), ya'ni har bir havolaning ichida
+ * yashashi kerak. Bizga esa navbar ustida turadigan bitta global chiziq
+ * kerak, qolaversa u 1-manbani — API so'rovlarini — umuman ko'rmaydi.
  */
 
 import { useEffect, useRef, useState } from "react";
