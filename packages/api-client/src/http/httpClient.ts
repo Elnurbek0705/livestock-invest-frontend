@@ -3,8 +3,15 @@ import { ApiError } from "../types";
 
 // Next.js "NEXT_PUBLIC_" prefiksli o'zgaruvchilar build vaqtida ham,
 // server tomonida ham to'g'ri o'qiladi.
+//
+// Oxirgi slash olib tashlanadi. Xosting panellarida manzil ko'pincha
+// `https://api.example.com/` ko'rinishida nusxalanadi, yo'llar esa `/` bilan
+// boshlanadi — natijada `https://api.example.com//auth/register` hosil
+// bo'lardi va server 404 qaytarardi. Xatoning sababi brauzer konsolida
+// deyarli ko'rinmaydi, shuning uchun uni shu yerda oldini olamiz.
 function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+  return raw.replace(/\/+$/, "");
 }
 
 interface RequestOptions {
