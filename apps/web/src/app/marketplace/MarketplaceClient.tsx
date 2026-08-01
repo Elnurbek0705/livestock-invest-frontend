@@ -53,8 +53,6 @@ interface MarketplaceClientProps {
   listings: Livestock[];
   farms: Farm[];
   loadError: string | null;
-  /** Backend bo'sh yoki yetib bormaganda ko'rsatilayotgan namuna e'lonlar */
-  isDemo: boolean;
 }
 
 /** Katakda 3×4, jadvalda esa qatorlar ixcham — shuning uchun sig'imi boshqa. */
@@ -64,7 +62,6 @@ export function MarketplaceClient({
   listings,
   farms,
   loadError,
-  isDemo,
 }: MarketplaceClientProps) {
   const [filters, setFilters] = useState<MarketFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<"grid" | "table">("grid");
@@ -230,15 +227,12 @@ export function MarketplaceClient({
           />
         </div>
 
-        {(loadError || isDemo) && (
+        {loadError && (
           <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <p>
-              Bu sahifada namuna e'lonlar ko'rsatilmoqda — haqiqiy ma'lumotlar hali
-              yuklanmadi.
-              {loadError && (
-                <span className="mt-1 block text-xs opacity-80">{loadError}</span>
-              )}
+              E'lonlarni yuklab bo'lmadi.
+              <span className="mt-1 block text-xs opacity-80">{loadError}</span>
             </p>
           </div>
         )}
@@ -318,7 +312,17 @@ export function MarketplaceClient({
                 </div>
               </div>
 
-              {visible.length === 0 ? (
+              {/* Ikki xil bo'shlik, ikki xil sabab: bozorda umuman e'lon
+                  yo'qmi, yoki filtrlar hammasini chetlab o'tdimi. Bittasini
+                  ikkinchisining matni bilan ko'rsatsak, foydalanuvchi yo'q
+                  filtrni tozalashga urinib vaqt yo'qotadi. */}
+              {rows.length === 0 ? (
+                <EmptyState
+                  icon={Sprout}
+                  title="Hozircha e'lon yo'q"
+                  description="Bozorga hali birorta qo'zi qo'yilmagan. Fermerlar e'lon joylashi bilan shu yerda ko'rinadi."
+                />
+              ) : visible.length === 0 ? (
                 <EmptyState
                   icon={Search}
                   title="Mos e'lon topilmadi"
