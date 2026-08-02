@@ -1,5 +1,6 @@
 import type {
   AdminDashboard,
+  AdminVetRow,
   KycSubmission,
   KycSubmissionWithUser,
   MonthlyReport,
@@ -265,6 +266,12 @@ export const httpApi: LivestockInvestApi = {
         method: "PATCH",
         body: input,
       });
+    },
+    async listVets(verified) {
+      const qs = buildQuery({
+        verified: verified === undefined ? undefined : String(verified),
+      });
+      return apiRequest<AdminVetRow[]>(`/admin/vets${qs}`);
     },
     async verifyVetLicense(vetUserId, isVerified) {
       return apiRequest<VetProfile>(`/admin/vets/${vetUserId}/license`, {

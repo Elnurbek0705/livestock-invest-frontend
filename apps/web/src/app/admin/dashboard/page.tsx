@@ -9,12 +9,14 @@ import {
   LayoutDashboard,
   ListChecks,
   ShieldCheck,
+  Stethoscope,
   Users,
   Wallet,
 } from "lucide-react";
 import { getApiClient } from "@livestock-invest/api-client";
 import type {
   AdminDashboard,
+  AdminVetRow,
   Farm,
   Investment,
   User,
@@ -43,6 +45,7 @@ import {
   type QueueKey,
 } from "@/components/admin/InvestmentQueue";
 import { UsersTable } from "@/components/admin/UsersTable";
+import { VetsTable } from "@/components/admin/VetsTable";
 import { SaleAmountModal } from "@/components/admin/SaleAmountModal";
 import {
   FARM_VERIFICATION,
@@ -50,7 +53,7 @@ import {
   formatUzsCompact,
 } from "@/lib/uz";
 
-type TabKey = "overview" | "farms" | "investments" | "users";
+type TabKey = "overview" | "farms" | "investments" | "vets" | "users";
 
 /**
  * Tasdiqlash kutayotgan amal.
@@ -64,7 +67,8 @@ type PendingAction =
   | { kind: "verifyFarm"; farm: Farm; approve: boolean }
   | { kind: "releaseEscrow"; investment: Investment }
   | { kind: "completePayout"; investment: Investment }
-  | { kind: "changeRole"; user: User; role: UserRole };
+  | { kind: "changeRole"; user: User; role: UserRole }
+  | { kind: "verifyVet"; vet: AdminVetRow; verify: boolean };
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -74,6 +78,7 @@ export default function AdminDashboardPage() {
 
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [vets, setVets] = useState<AdminVetRow[]>([]);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,12 +96,14 @@ export default function AdminDashboardPage() {
     setLoadError(null);
     try {
       const api = getApiClient();
-      const [dashboardData, userList] = await Promise.all([
+      const [dashboardData, userList, vetList] = await Promise.all([
         api.admin.getDashboard(),
         api.admin.listUsers(),
+        api.admin.listVets(),
       ]);
       setDashboard(dashboardData);
       setUsers(userList);
+      setVets(vetList);
     } catch (error) {
       setLoadError(errorText(error, "Admin ma'lumotlarini yuklab bo'lmadi"));
     } finally {
@@ -153,6 +160,10 @@ export default function AdminDashboardPage() {
 
   const pendingFarms = dashboard?.farms.pending ?? [];
   const pendingKycCount = dashboard?.kyc.pendingCount ?? 0;
+  const pendingVetCount = useMemo(
+    () => vets.filter((row) => !row.profile?.isLicenseVerified).length,
+    [vets],
+  );
 
   // ---- Amallar ------------------------------------------------------------
   const runAction = async (
@@ -209,6 +220,18 @@ export default function AdminDashboardPage() {
           `${pendingAction.user.fullName} endi ${USER_ROLE[pendingAction.role]}.`,
           "Rolni o'zgartirishda xatolik",
         );
+      case "verifyVet":
+        return runAction(
+          () =>
+            api.admin.verifyVetLicense(
+              pendingAction.vet.user.id,
+              pendingAction.verify,
+            ),
+          pendingAction.verify
+            ? `${pendingAction.vet.user.fullName} litsenziyasi tasdiqlandi.`
+            : `${pendingAction.vet.user.fullName} litsenziyasi bekor qilindi.`,
+          "Litsenziyani o'zgartirishda xatolik",
+        );
     }
   };
 
@@ -253,6 +276,20 @@ export default function AdminDashboardPage() {
             "Investor va fermer ulushlari hisoblariga o'tkaziladi. Bu qadam yakuniy — ortga qaytarilmaydi.",
           confirmText: "Ha, taqsimlansin",
         };
+      case "verifyVet":
+        return pendingAction.verify
+          ? {
+              type: "success" as const,
+              title: "Litsenziya tasdiqlansinmi?",
+              description: `${pendingAction.vet.user.fullName} (${pendingAction.vet.profile?.licenseNumber}) tasdiqlangach veterinariya xulosalari yoza boshlaydi va fermalarni tekshira oladi. Raqamni davlat reestri bilan solishtirganingizga ishonch hosil qiling.`,
+              confirmText: "Ha, tasdiqlansin",
+            }
+          : {
+              type: "danger" as const,
+              title: "Tasdiq bekor qilinsinmi?",
+              description: `${pendingAction.vet.user.fullName} endi hisobot yoza olmaydi va ferma tekshira olmaydi. Ilgari yozgan xulosalari joyida qoladi.`,
+              confirmText: "Ha, bekor qilinsin",
+            };
       case "changeRole":
         return {
           type: "warning" as const,
@@ -268,6 +305,14 @@ export default function AdminDashboardPage() {
     { key: "overview", label: "Umumiy ko'rinish", icon: LayoutDashboard },
     { key: "farms", label: "Fermalar", icon: Building2, badge: pendingFarms.length },
     { key: "investments", label: "Bitimlar navbati", icon: Coins, badge: queueTotal },
+    {
+      key: "vets",
+      label: "Veterinarlar",
+      icon: Stethoscope,
+      // Faqat tasdiq kutayotganlar sanaladi — nishon "ish bor" degani
+      // bo'lishi kerak, "shuncha vet bor" degani emas.
+      badge: pendingVetCount,
+    },
     { key: "users", label: "Foydalanuvchilar", icon: Users, badge: users.length },
   ];
 
@@ -512,6 +557,28 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ---------------- Foydalanuvchilar ---------------- */}
+            {tab === "vets" && (
+              <Panel className="overflow-hidden">
+                <PanelHeader
+                  icon={Stethoscope}
+                  title="Veterinarlar"
+                  subtitle="Tasdiqlanmagan veterinar hisobot yoza olmaydi va ferma tekshira olmaydi"
+                />
+                <div className="p-4">
+                  {isLoading ? (
+                    <SkeletonRows rows={4} />
+                  ) : (
+                    <VetsTable
+                      vets={vets}
+                      onRequestVerify={(vet, verify) =>
+                        setPendingAction({ kind: "verifyVet", vet, verify })
+                      }
+                    />
+                  )}
+                </div>
+              </Panel>
+            )}
+
             {tab === "users" && (
               <Panel className="overflow-hidden">
                 <PanelHeader

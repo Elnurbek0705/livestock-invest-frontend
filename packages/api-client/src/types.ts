@@ -1,5 +1,6 @@
 import type {
   AdminDashboard,
+  AdminVetRow,
   Farm,
   FarmVerificationStatus,
   Investment,
@@ -181,6 +182,11 @@ export interface LivestockInvestApi {
         rejectionReason?: string;
       },
     ): Promise<KycSubmission>;
+    /**
+     * Veterinarlar litsenziya ma'lumotlari bilan. `verified` berilmasa —
+     * hammasi, `false` — tasdiq kutayotganlar, `true` — tasdiqlanganlar.
+     */
+    listVets(verified?: boolean): Promise<AdminVetRow[]>;
     /** Tasdiqlanmagan vet hisobot ham yoza olmaydi, ferma ham tekshira olmaydi */
     verifyVetLicense(vetUserId: string, isVerified: boolean): Promise<VetProfile>;
   };

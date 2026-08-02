@@ -125,6 +125,18 @@ export interface KycSubmissionWithUser extends KycSubmission {
   user: User;
 }
 
+/**
+ * GET /admin/vets javobi.
+ *
+ * Ochiq profilda litsenziya raqami ataylab yo'q — u ommaviy ma'lumot emas.
+ * Admin esa tasdiqlash qarorini aynan shu raqamga qarab qabul qiladi,
+ * shuning uchun unga alohida to'liq ko'rinish beriladi.
+ */
+export interface AdminVetRow {
+  user: User;
+  profile: VetProfile | null;
+}
+
 /** GET /users/me javobi */
 export interface MyProfile {
   user: User;
